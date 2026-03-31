@@ -69,21 +69,24 @@
     },
     {
       "parameters": {
-        "fromEmail": "your-smtp-email@gmail.com",
-        "toEmail": "your-inbox-email@gmail.com",
+        "resource": "message",
+        "operation": "send",
         "subject": "={{ $json.subject }}",
-        "emailType": "html",
-        "html": "={{ $json.html }}"
+        "message": "={{ $json.html }}",
+        "toList": [
+          "your-inbox-email@gmail.com"
+        ],
+        "appendAttribution": false
       },
-      "name": "Send Approval Email",
-      "type": "n8n-nodes-base.emailSend",
+      "name": "Send Approval Email (Gmail API)",
+      "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.1,
       "position": [950, 150],
       "id": "e2f1e2f1-bbbb-ccaa-1111-200000000006",
       "credentials": {
-        "smtp": {
+        "gmailOAuth2": {
           "id": "CREATE_IN_N8N",
-          "name": "SMTP account"
+          "name": "Gmail account"
         }
       }
     },
@@ -161,7 +164,7 @@
       "main": [
         [
           {
-            "node": "Send Approval Email",
+            "node": "Send Approval Email (Gmail API)",
             "type": "main",
             "index": 0
           }
