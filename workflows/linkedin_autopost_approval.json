@@ -20,28 +20,20 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://api.openai.com/v1/chat/completions",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "openAiApi",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=PASTE_GEMINI_KEY_HERE",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "{\n  \"model\": \"gpt-4o-mini\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are an expert LinkedIn growth hacker and software engineer. Write a highly engaging, concise post (under 150 words) about a recent AI or coding trend. It must be professional and insightful with max 3 hashtags.\\n\\nCRITICAL INSTRUCTION: At the very end of your response, on a new line, write a 3-6 word visual description of a conceptual image to accompany the post. Wrap it exactly in brackets like this: [IMAGE: futuristic robot typing code]. Do not miss this step.\"\n    }\n  ],\n  \"temperature\": 0.7\n}"
+        "jsonBody": "{\n  \"contents\": [{\n    \"parts\":[{\"text\": \"You are an expert LinkedIn growth hacker and software engineer. Write a highly engaging, concise post (under 150 words) about a recent AI or coding trend. It must be professional and insightful with max 3 hashtags.\\n\\nCRITICAL INSTRUCTION: At the very end of your response, on a new line, write a 3-6 word visual description of a conceptual image to accompany the post. Wrap it exactly in brackets like this: [IMAGE: futuristic robot typing code]. Do not miss this step.\"}]\n  }]\n}"
       },
       "name": "Generate LinkedIn Post",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [250, 400],
-      "id": "e2f1e2f1-bbbb-ccaa-1111-200000000002",
-      "credentials": {
-        "openAiApi": {
-          "id": "CREATE_IN_N8N",
-          "name": "OpenAI account"
-        }
-      }
+      "id": "e2f1e2f1-bbbb-ccaa-1111-200000000002"
     },
     {
       "parameters": {
-        "jsCode": "const responseText = $input.first().json.choices[0].message.content;\n\n// Extract the image prompt inside [IMAGE: ...]\nconst imageRegex = /\\[IMAGE:\\s*(.*?)\\]/i;\nconst imageMatch = responseText.match(imageRegex);\n\nlet imagePrompt = \"futuristic artificial intelligence coding screen with bright neon colors concept art\";\nlet postText = responseText;\n\nif (imageMatch && imageMatch[1]) {\n  imagePrompt = imageMatch[1].trim() + \" bright colorful highly detailed digital art 4k trending\";\n  // Remove the tag from the final string we will post to LinkedIn\n  postText = responseText.replace(imageRegex, '').trim();\n}\n\n// Generate the Pollinations URL for the image\nconst encodedPrompt = encodeURIComponent(imagePrompt);\n// Pollinations is a free keyless image generator\nconst imageUrl = `https://pollinations.ai/p/${encodedPrompt}?width=1080&height=1080&nologo=true&enhance=true`;\n\nreturn {\n  postText: postText,\n  imageUrl: imageUrl\n};\n"
+        "jsCode": "const responseText = $input.first().json.candidates[0].content.parts[0].text;\n\n// Extract the image prompt inside [IMAGE: ...]\nconst imageRegex = /\\[IMAGE:\\s*(.*?)\\]/i;\nconst imageMatch = responseText.match(imageRegex);\n\nlet imagePrompt = \"futuristic artificial intelligence coding screen with bright neon colors concept art\";\nlet postText = responseText;\n\nif (imageMatch && imageMatch[1]) {\n  imagePrompt = imageMatch[1].trim() + \" bright colorful highly detailed digital art 4k trending\";\n  // Remove the tag from the final string we will post to LinkedIn\n  postText = responseText.replace(imageRegex, '').trim();\n}\n\n// Generate the Pollinations URL for the image\nconst encodedPrompt = encodeURIComponent(imagePrompt);\n// Pollinations is a free keyless image generator\nconst imageUrl = `https://pollinations.ai/p/${encodedPrompt}?width=1080&height=1080&nologo=true&enhance=true`;\n\nreturn {\n  postText: postText,\n  imageUrl: imageUrl\n};\n"
       },
       "name": "Parse Post & Image URL",
       "type": "n8n-nodes-base.code",
