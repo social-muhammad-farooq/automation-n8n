@@ -1,0 +1,211 @@
+{
+  "name": "LinkedIn Auto-Poster with Email Approval",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days"
+            }
+          ]
+        }
+      },
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 400],
+      "id": "e2f1e2f1-bbbb-ccaa-1111-200000000001"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"model\": \"gpt-4o-mini\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are an expert LinkedIn growth hacker and software engineer. Write a highly engaging, concise post (under 150 words) about a recent AI or coding trend. It must be professional and insightful with max 3 hashtags.\\n\\nCRITICAL INSTRUCTION: At the very end of your response, on a new line, write a 3-6 word visual description of a conceptual image to accompany the post. Wrap it exactly in brackets like this: [IMAGE: futuristic robot typing code]. Do not miss this step.\"\n    }\n  ],\n  \"temperature\": 0.7\n}"
+      },
+      "name": "Generate LinkedIn Post",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [250, 400],
+      "id": "e2f1e2f1-bbbb-ccaa-1111-200000000002",
+      "credentials": {
+        "openAiApi": {
+          "id": "CREATE_IN_N8N",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const responseText = $input.first().json.choices[0].message.content;\n\n// Extract the image prompt inside [IMAGE: ...]\nconst imageRegex = /\\[IMAGE:\\s*(.*?)\\]/i;\nconst imageMatch = responseText.match(imageRegex);\n\nlet imagePrompt = \"futuristic artificial intelligence coding screen with bright neon colors concept art\";\nlet postText = responseText;\n\nif (imageMatch && imageMatch[1]) {\n  imagePrompt = imageMatch[1].trim() + \" bright colorful highly detailed digital art 4k trending\";\n  // Remove the tag from the final string we will post to LinkedIn\n  postText = responseText.replace(imageRegex, '').trim();\n}\n\n// Generate the Pollinations URL for the image\nconst encodedPrompt = encodeURIComponent(imagePrompt);\n// Pollinations is a free keyless image generator\nconst imageUrl = `https://pollinations.ai/p/${encodedPrompt}?width=1080&height=1080&nologo=true&enhance=true`;\n\nreturn {\n  postText: postText,\n  imageUrl: imageUrl\n};\n"
+      },
+      "name": "Parse Post & Image URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 400],
+      "id": "e2f1e2f1-bbbb-ccaa-1111-200000000003"
+    },
+    {
+      "parameters": {
+        "resume": "webhook",
+        "path": "post-approval",
+        "options": {
+          "webhookResponse": "<html><head><title>Success!</title><head><body style=\"text-align:center;font-family:sans-serif;margin-top:50px\"><h1>\u2705 Post Approved!</h1><p>It is currently being published on LinkedIn. You can close this window now.</p></body></html>",
+          "webhookContentType": "text/html"
+        }
+      },
+      "name": "Wait For Approval",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1000, 400],
+      "id": "e2f1e2f1-bbbb-ccaa-1111-200000000004",
+      "webhookId": "b6a70a8d-192e-4ba3-abde-fb88e1bb8dc9"
+    },
+    {
+      "parameters": {
+        "jsCode": "const postText = $input.first().json.postText;\nconst imageUrl = $input.first().json.imageUrl;\n\n// In older n8n versions, $resumeWebhookUrl might need to be constructed\n// Usually n8n populates it if there's a Webhook waiting. \n// To be safe, we dynamically pull the generated webhook wait url from n8n Context\nconst webhookUrl = $('Wait For Approval').execution?.resumeUrl || $resumeWebhookUrl || 'URL-Missing';\n\nconst subject = \"\u23F3 Action Required: Approve your new LinkedIn Post!\";\n\nconst emailBody = `\n<div style=\"font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px\">\n  <h2>\uD83E\uDD16 Your new AI LinkedIn Post is Ready</h2>\n  <p>Gemini/OpenAI generated the following update for your LinkedIn network:</p>\n  <hr/>\n  <div style=\"background: #f9f9f9; padding: 15px; border-radius: 4px; white-space: pre-wrap;\">\n    ${postText}\n  </div>\n  <br>\n  <div style=\"text-align: center\">\n    <p><strong>Generated Image:</strong></p>\n    <img src=\"${imageUrl}\" style=\"max-width: 100%; border-radius: 8px;\" />\n  </div>\n  <hr/>\n  <div style=\"text-align: center; margin-top: 30px\">\n    <a href=\"${webhookUrl}\" style=\"background: #0077b5; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;\">\u2705 APPROVE & POST TO LINKEDIN</a>\n  </div>\n  <p style=\"text-align: center; color: #888; font-size: 12px; margin-top: 20px\">If you ignore this email, nothing will be posted.</p>\n</div>\n`;\n\nreturn {\n  subject: subject,\n  html: emailBody,\n  postText: postText,\n  imageUrl: imageUrl\n};\n"
+      },
+      "name": "Format Email & Wait Webhook",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 200],
+      "id": "e2f1e2f1-bbbb-ccaa-1111-200000000005"
+    },
+    {
+      "parameters": {
+        "fromEmail": "your-smtp-email@gmail.com",
+        "toEmail": "your-inbox-email@gmail.com",
+        "subject": "={{ $json.subject }}",
+        "emailType": "html",
+        "html": "={{ $json.html }}"
+      },
+      "name": "Send Approval Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [950, 150],
+      "id": "e2f1e2f1-bbbb-ccaa-1111-200000000006",
+      "credentials": {
+        "smtp": {
+          "id": "CREATE_IN_N8N",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Parse Post & Image URL').item.json.imageUrl }}",
+        "responseFormat": "file",
+        "options": {}
+      },
+      "name": "Download Final Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1250, 400],
+      "id": "e2f1e2f1-bbbb-ccaa-1111-200000000007"
+    },
+    {
+      "parameters": {
+        "person": "urn:li:person:YOUR_ID",
+        "text": "={{ $('Parse Post & Image URL').item.json.postText }}\n\n[Created via Automation]",
+        "image": "data"
+      },
+      "name": "Post to LinkedIn",
+      "type": "n8n-nodes-base.linkedIn",
+      "typeVersion": 1,
+      "position": [1500, 400],
+      "id": "e2f1e2f1-bbbb-ccaa-1111-200000000008",
+      "credentials": {
+        "linkedInOAuth2Api": {
+          "id": "CREATE_IN_N8N",
+          "name": "LinkedIn account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Generate LinkedIn Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate LinkedIn Post": {
+      "main": [
+        [
+          {
+            "node": "Parse Post & Image URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Post & Image URL": {
+      "main": [
+        [
+          {
+            "node": "Wait For Approval",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Format Email & Wait Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Email & Wait Webhook": {
+      "main": [
+        [
+          {
+            "node": "Send Approval Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait For Approval": {
+      "main": [
+        [
+          {
+            "node": "Download Final Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Final Image": {
+      "main": [
+        [
+          {
+            "node": "Post to LinkedIn",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "instanceId": "local"
+  },
+  "tags": []
+}
