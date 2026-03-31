@@ -1,0 +1,119 @@
+{
+  "name": "Upwork Auto Job Hunter (ScraperAPI Edition)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "minutes", "minutesInterval": 15 }]
+        }
+      },
+      "id": "c1b2c3d4-1111-4000-8000-000000000001",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "url": "=http://api.scraperapi.com?api_key=PASTE_YOUR_SCRAPERAPI_KEY_HERE&url={{ encodeURIComponent('https://www.upwork.com/nx/search/jobs/?q=laravel+php+api+bug+fixing&sort=recency') }}",
+        "options": {}
+      },
+      "id": "c1b2c3d4-1111-4000-8000-000000000002",
+      "name": "ScraperAPI Fetch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const htmlStr = typeof $input.first().json === 'string' ? $input.first().json : $input.first().json.data;\n\n// Try to find __NEXT_DATA__ JSON block first (Most robust way to scrape Upwork NextJS app)\nlet jobsData = [];\ntry {\n  const scriptMatch = htmlStr.match(/<script id=\"__NEXT_DATA__\"[^>]+>([\\s\\S]*?)<\\/script>/);\n  if (scriptMatch && scriptMatch[1]) {\n    const jsonData = JSON.parse(scriptMatch[1]);\n    const searchResults = jsonData?.props?.pageProps?.serverSideData?.searchResults || [];\n    if (searchResults.length > 0) jobsData = searchResults;\n  }\n} catch(e) { /* fallback */ }\n\n// Fallback: Extremely generic RegEx extraction for Job titles and links just in case\nif (jobsData.length === 0) {\n  const titleRegex = /<h3 class=\"job-tile-title\">.*?<a href=\"([^\"]+)\".*?>([\\s\\S]*?)<\\/a>.*?<\\/h3>/gi;\n  const descRegex = /<span data-test=\"job-description-text\">([\\s\\S]*?)<\\/span>/gi;\n  let matchTitle;\n  let matchDesc;\n  while ((matchTitle = titleRegex.exec(htmlStr)) !== null) {\n    matchDesc = descRegex.exec(htmlStr);\n    jobsData.push({\n      url: 'https://www.upwork.com' + matchTitle[1],\n      title: matchTitle[2].replace(/<[^>]*>?/gm, '').trim(),\n      description: matchDesc ? matchDesc[1].replace(/<[^>]*>?/gm, '').trim() : '',\n    });\n  }\n}\n\n// Mapping to standard format for the rest of workflow\nconst formattedJobs = jobsData.map(job => {\n  return { json: {\n    title: job.title || job.titleText,\n    link: job.url || job.ciphertext ? `https://www.upwork.com/jobs/~${job.ciphertext}` : '',\n    description: job.description || job.snippet,\n    isPaymentVerified: job.client?.paymentVerificationStatus === 1 || false\n  }};\n});\n\nreturn formattedJobs.length > 0 ? formattedJobs : [{ json: { noResults: true, title: '' } }];"
+      },
+      "id": "c1b2c3d4-1111-4000-8000-000000000003",
+      "name": "Extract HTML / Code",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const keywords = ['laravel', 'php', 'api', 'payment', 'bug fix', 'bug fixing', 'rest api', 'mysql'];\nconst blacklist = ['wordpress', 'shopify', 'wix', '.net', 'react native', 'flutter', 'django'];\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.seenJobs) staticData.seenJobs = {};\n\nconst now = Date.now();\n// Clean entries older than 7 days\nfor (const [id, ts] of Object.entries(staticData.seenJobs)) {\n  if (now - ts > 7*24*60*60*1000) delete staticData.seenJobs[id];\n}\n\nconst results = [];\nfor (const item of $input.all()) {\n  if (item.json.noResults) continue;\n\n  const title = (item.json.title || '').toLowerCase();\n  const desc = (item.json.description || '').toLowerCase();\n  const link = item.json.link || '';\n  const combined = title + ' ' + desc;\n  const jobId = link || title;\n\n  if (!jobId || staticData.seenJobs[jobId]) continue;\n\n  const matched = keywords.filter(kw => combined.includes(kw));\n  if (matched.length === 0) continue;\n\n  const blocked = blacklist.some(kw => combined.includes(kw));\n  if (blocked) continue;\n\n  staticData.seenJobs[jobId] = now;\n\n  const sysPrompt = 'You are an expert PHP/Laravel developer. Write a compelling, concise Upwork proposal...';\n  const userPrompt = 'JOB TITLE: ' + (item.json.title) + '\\n\\nDESCRIPTION:\\n' + (item.json.description) + '\\n\\nWrite the proposal now:';\n\n  results.push({\n    json: {\n      ...item.json,\n      matchedKeywords: matched,\n      qualityScore: matched.length,\n      openaiBody: JSON.stringify({ model: 'gpt-4o-mini', messages: [{ role: 'system', content: sysPrompt }, { role: 'user', content: userPrompt }], temperature: 0.7, max_tokens: 600 })\n    }\n  });\n}\n\nreturn results.length > 0 ? results : [{ json: { noResults: true, title: '' } }];"
+      },
+      "id": "c1b2c3d4-1111-4000-8000-000000000004",
+      "name": "Filter and Prepare AI",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [{ "id": "cond-1", "leftValue": "={{ $json.title }}", "rightValue": "", "operator": { "type": "string", "operation": "isNotEmpty" } }],
+          "combinator": "and"
+        }
+      },
+      "id": "c1b2c3d4-1111-4000-8000-000000000005",
+      "name": "Has Results",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1000, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.openaiBody }}"
+      },
+      "id": "c1b2c3d4-1111-4000-8000-000000000006",
+      "name": "Generate Proposal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 200],
+      "credentials": { "openAiApi": { "id": "CREATE_IN_N8N", "name": "OpenAI account" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst results = [];\nfor (let i = 0; i < items.length; i++) {\n  const proposal = items[i].json.choices?.[0]?.message?.content || 'Failed to generate proposal';\n  const job = $('Filter and Prepare AI').all()[i]?.json || {};\n  const title = job.title || 'Unknown Job';\n  const link = job.link || '#';\n  const matched = (job.matchedKeywords || []).join(', ');\n\n  const subject = '🚀 New Upwork Job: ' + title;\n  const body = '<div style=\"font-family:Segoe UI,Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px\"><div style=\"background:linear-gradient(135deg,#667eea,#764ba2);padding:20px;border-radius:12px 12px 0 0;text-align:center\"><h1 style=\"color:#fff;margin:0;font-size:22px\">🎯 Scraped Job Match!</h1></div><div style=\"background:#f8f9fa;padding:20px;border:1px solid #e9ecef\"><h2 style=\"color:#2d3748;margin-top:0\">' + title + '</h2><p style=\"margin-top:10px\"><strong>Matched Skills:</strong> ' + matched + '</p><div style=\"margin:15px 0\"><a href=\"' + link + '\" style=\"display:inline-block;background:#4299e1;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:bold\">🔗 View Job on Upwork</a></div></div><div style=\"background:#fff;padding:20px;border:1px solid #e9ecef;border-top:none\"><h3 style=\"color:#2d3748;border-bottom:2px solid #667eea;padding-bottom:8px\">📝 AI-Generated Proposal</h3><div style=\"background:#f7fafc;padding:15px;border-radius:8px;border-left:4px solid #667eea;white-space:pre-wrap;line-height:1.6\">' + proposal + '</div></div><div style=\"background:#2d3748;color:#a0aec0;padding:15px;border-radius:0 0 12px 12px;text-align:center;font-size:12px\"><p>Upwork Auto Job Hunter (ScraperAPI) • n8n</p></div></div>';\n\n  results.push({ json: { subject, body, title, link, proposal } });\n}\nreturn results;"
+      },
+      "id": "c1b2c3d4-1111-4000-8000-000000000007",
+      "name": "Format Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1500, 200]
+    },
+    {
+      "parameters": {
+        "fromEmail": "your-email@gmail.com",
+        "toEmail": "your-email@gmail.com",
+        "subject": "={{ $json.subject }}",
+        "emailType": "html",
+        "html": "={{ $json.body }}",
+        "options": {}
+      },
+      "id": "c1b2c3d4-1111-4000-8000-000000000008",
+      "name": "Send Notification",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1750, 200],
+      "credentials": { "smtp": { "id": "CREATE_IN_N8N", "name": "SMTP account" } }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": { "main": [[{ "node": "ScraperAPI Fetch", "type": "main", "index": 0 }]] },
+    "ScraperAPI Fetch": { "main": [[{ "node": "Extract HTML / Code", "type": "main", "index": 0 }]] },
+    "Extract HTML / Code": { "main": [[{ "node": "Filter and Prepare AI", "type": "main", "index": 0 }]] },
+    "Filter and Prepare AI": { "main": [[{ "node": "Has Results", "type": "main", "index": 0 }]] },
+    "Has Results": { "main": [[{ "node": "Generate Proposal", "type": "main", "index": 0 }], []] },
+    "Generate Proposal": { "main": [[{ "node": "Format Email", "type": "main", "index": 0 }]] },
+    "Format Email": { "main": [[{ "node": "Send Notification", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "versionId": "1",
+  "meta": { "instanceId": "local" },
+  "tags": []
+}
