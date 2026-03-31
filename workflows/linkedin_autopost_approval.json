@@ -20,7 +20,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=PASTE_GEMINI_KEY_HERE",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=PASTE_GEMINI_KEY_HERE",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "{\n  \"contents\": [{\n    \"parts\":[{\"text\": \"You are an expert LinkedIn growth hacker and software engineer. Write a highly engaging, concise post (under 150 words) about a recent AI or coding trend. It must be professional and insightful with max 3 hashtags.\\n\\nCRITICAL INSTRUCTION: At the very end of your response, on a new line, write a 3-6 word visual description of a conceptual image to accompany the post. Wrap it exactly in brackets like this: [IMAGE: futuristic robot typing code]. Do not miss this step.\"}]\n  }]\n}"
