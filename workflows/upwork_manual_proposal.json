@@ -1,0 +1,95 @@
+{
+  "name": "Upwork Manual Proposal Generator",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "upwork-proposal",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "b1b2c3d4-2222-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "webhookId": "upwork-proposal-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst body = input.body || input;\nconst url = body.url || '';\nconst title = body.title || 'Laravel/PHP Job';\nconst description = body.description || '';\n\nlet context = '';\nif (description) {\n  context = description;\n} else if (url) {\n  context = 'Job URL: ' + url + '. Please write a strong proposal for a Laravel/PHP developer role based on the job title.';\n} else {\n  context = 'No description provided. Write based on title only.';\n}\n\nconst sysPrompt = 'You are an expert PHP/Laravel developer (8+ yrs). Specialties: Laravel apps, payment gateway integrations (Stripe, PayPal), REST APIs, MySQL, PHP debugging & optimization. Write a compelling Upwork proposal (150-250 words). Rules: 1) Hook showing you understand THEIR specific problem 2) 2-3 relevant experiences 3) 3-4 bullet approach 4) Timeline estimate 5) Confident closing with call to action 6) Sound human NOT generic 7) NEVER say Dear Hiring Manager 8) Be direct and confident in first person';\nconst userPrompt = 'JOB TITLE: ' + title + '\\n\\nJOB DESCRIPTION:\\n' + context + '\\n\\nWrite the proposal now:';\n\nreturn [{\n  json: {\n    title: title,\n    link: url,\n    description: context,\n    openaiBody: JSON.stringify({\n      model: 'gpt-4o-mini',\n      messages: [\n        { role: 'system', content: sysPrompt },\n        { role: 'user', content: userPrompt }\n      ],\n      temperature: 0.7,\n      max_tokens: 600\n    })\n  }\n}];"
+      },
+      "id": "b1b2c3d4-2222-4000-8000-000000000002",
+      "name": "Prepare Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.openaiBody }}"
+      },
+      "id": "b1b2c3d4-2222-4000-8000-000000000003",
+      "name": "Generate Proposal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 300],
+      "credentials": { "openAiApi": { "id": "CREATE_IN_N8N", "name": "OpenAI account" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const proposal = $json.choices?.[0]?.message?.content || 'Failed to generate proposal';\nconst job = $('Prepare Prompt').first().json;\nconst title = job.title || 'Unknown';\nconst link = job.link || '';\n\nconst subject = '📝 Upwork Proposal Ready: ' + title;\nconst emailBody = '<div style=\"font-family:Segoe UI,Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px\"><div style=\"background:linear-gradient(135deg,#11998e,#38ef7d);padding:20px;border-radius:12px 12px 0 0;text-align:center\"><h1 style=\"color:#fff;margin:0;font-size:22px\">📝 Proposal Ready!</h1></div><div style=\"background:#f8f9fa;padding:20px;border:1px solid #e9ecef\"><h2 style=\"color:#2d3748;margin-top:0\">' + title + '</h2>' + (link ? '<div style=\"margin:15px 0\"><a href=\"' + link + '\" style=\"display:inline-block;background:#4299e1;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:bold\">🔗 Apply on Upwork</a></div>' : '') + '</div><div style=\"background:#fff;padding:20px;border:1px solid #e9ecef;border-top:none\"><h3 style=\"color:#2d3748;border-bottom:2px solid #11998e;padding-bottom:8px\">Your Proposal</h3><div style=\"background:#f7fafc;padding:15px;border-radius:8px;border-left:4px solid #11998e;white-space:pre-wrap;line-height:1.6\">' + proposal + '</div></div><div style=\"background:#2d3748;color:#a0aec0;padding:15px;border-radius:0 0 12px 12px;text-align:center;font-size:12px\"><p>Manual Proposal Generator • n8n</p></div></div>';\n\nreturn [{ json: { success: true, title, link, proposal, subject, emailBody } }];"
+      },
+      "id": "b1b2c3d4-2222-4000-8000-000000000004",
+      "name": "Format Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: $json.success, title: $json.title, link: $json.link, proposal: $json.proposal }) }}",
+        "options": {}
+      },
+      "id": "b1b2c3d4-2222-4000-8000-000000000005",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1000, 200]
+    },
+    {
+      "parameters": {
+        "fromEmail": "your-email@gmail.com",
+        "toEmail": "your-email@gmail.com",
+        "subject": "={{ $json.subject }}",
+        "emailType": "html",
+        "html": "={{ $json.emailBody }}",
+        "options": {}
+      },
+      "id": "b1b2c3d4-2222-4000-8000-000000000006",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1000, 400],
+      "credentials": { "smtp": { "id": "CREATE_IN_N8N", "name": "SMTP account" } }
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Prepare Prompt", "type": "main", "index": 0 }]] },
+    "Prepare Prompt": { "main": [[{ "node": "Generate Proposal", "type": "main", "index": 0 }]] },
+    "Generate Proposal": { "main": [[{ "node": "Format Output", "type": "main", "index": 0 }]] },
+    "Format Output": { "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }, { "node": "Send Email", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "versionId": "1",
+  "meta": { "instanceId": "local" },
+  "tags": []
+}

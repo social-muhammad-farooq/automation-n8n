@@ -1,0 +1,16 @@
+{
+  "name": "upword-automation-anti",
+  "version": "1.0.0",
+  "description": "This project contains an automated workflow to find relevant Upwork jobs, generate AI proposals, and email them directly to you.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "n8n": "^2.14.2"
+  }
+}

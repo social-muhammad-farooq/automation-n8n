@@ -1,0 +1,8 @@
+# Local data and secrets (NEVER UPLOAD THESE)
+.env
+n8n_data/
+node_modules/
+
+# OS generated
+.DS_Store
+Thumbs.db
